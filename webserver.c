@@ -18,6 +18,12 @@ long COUNTER=0;
 void* reply(void* inhandle);
 char* readFile(char* fileName);
 
+struct fileInfo
+{
+	int fileHandle;
+	int size;
+};
+
 void configureSocket(int port)
 {
 	struct sockaddr_in localaddr;
@@ -100,17 +106,35 @@ char* findRequestResponse(char* requestBuffer, int bufferSize)
 		
 		char url[length+1];
 
-        char* p = &url;
-        strncpy(url, start,length);
+        	char* p = url;
+        	strncpy(p, start,length);
 		url[length] = '\0'; //strncpy is too stupid to terminate strings..
 
-        char* result = readFile(p);
+        	char* result = readFile(p);
+        	return result;
+    	}
 
-        return result;
-    }
+	return NULL;
+}
 
-	char *empty = malloc(10);	
-	return empty;
+void send_response_ok(int sockethandle, int contentlength)
+{	
+        char *errormsg = "<body><h1>404 - Not Found</h1></body>";
+        char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+        char errorheader[strlen(errortemplate-1)];
+        snprintf(errorheader, strlen(errorheader), errortemplate, strlen(errormsg));
+}
+
+void send_response_404(int sockethandle)
+{
+
+        char *errormsg = "<body><h1>404 - Not Found</h1></body>";
+        char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+        char errorheader[strlen(errortemplate-1)];
+        snprintf(errorheader, strlen(errorheader), errortemplate, strlen(errormsg));
+        send(sockethandle, errorheader, strlen(errorheader), 0);
+        send(sockethandle, "\r\n", 2, 0);
+        send(sockethandle, errormsg, strlen(errormsg), 0);
 }
 
 void *reply(void *inhandle)
@@ -129,26 +153,17 @@ void *reply(void *inhandle)
 	char* returnValue = findRequestResponse(requestBuffer, recvSize);
 	free(requestBuffer);
 
-    if(returnValue != NULL)
-    {
-		printf("Sending response\n");
+    	if(returnValue != NULL)
+    	{
 		int length = strlen(returnValue);
 		printf("return payload length: %d\n", length);
 		send(handle, returnValue, length, 0);
 		free(returnValue);
-    }
-    else
-    {
-        //  cx = snprintf ( buffer, 100, "The half of %d is %d", 60, 60/2 );
-        char *errormsg = "<body><h1>404 - Not Found</h1></body>";
-        char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-        char errorheader[strlen(errortemplate-1)];
-        snprintf(errorheader, strlen(errorheader), errortemplate, strlen(errormsg));
-
-        send(handle, errorheader, strlen(errorheader), 0);
-        send(handle, "\r\n", 2, 0);
-        send(handle, errormsg, strlen(errormsg), 0);
-    }
+    	}
+    	else
+    	{
+		send_response_404(handle);
+    	}
 
 	close(handle);
 	NUM_THREADS--;
