@@ -9,20 +9,25 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 int SOCKET;
 int MAX_THREADS=3;
 int NUM_THREADS=0;
 long COUNTER=0;
 
-void* reply(void* inhandle);
-char* readFile(char* fileName);
-
 struct fileInfo
 {
+	bool valid;
 	int fileHandle;
 	int size;
+	bool isFolder;
+	bool isRegularFile;
 };
+
+void* reply(void* inhandle);
+char* readFile(char* fileName);
+struct fileInfo findFileInfo(char *path);
 
 void configureSocket(int port)
 {
@@ -119,10 +124,10 @@ char* findRequestResponse(char* requestBuffer, int bufferSize)
 
 void send_response_ok(int sockethandle, int contentlength)
 {	
-        char *errormsg = "<body><h1>404 - Not Found</h1></body>";
-        char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-        char errorheader[strlen(errortemplate-1)];
-        snprintf(errorheader, strlen(errorheader), errortemplate, strlen(errormsg));
+        char *headertemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+        char header[strlen(headertemplate-1)];
+        snprintf(header, strlen(header), headertemplate, contentlength);
+	send(sockethandle, header, strlen(header), 0);
 }
 
 void send_response_404(int sockethandle)
@@ -155,9 +160,9 @@ void *reply(void *inhandle)
 
     	if(returnValue != NULL)
     	{
-		int length = strlen(returnValue);
-		printf("return payload length: %d\n", length);
-		send(handle, returnValue, length, 0);
+		int contentlength = strlen(returnValue);
+		send_response_ok(handle, contentlength);
+		send(handle, returnValue, contentlength, 0);
 		free(returnValue);
     	}
     	else
@@ -167,9 +172,34 @@ void *reply(void *inhandle)
 
 	close(handle);
 	NUM_THREADS--;
-	printf("Thread exiting..\n");
 	pthread_exit(NULL);
 }
+
+
+struct fileInfo findFileInfo(char *path)
+{	
+	struct fileInfo fileinfo;
+	fileinfo.fileHandle = -1;
+	fileinfo.size = 0;
+	//TODO: Find the sensible way to initialize structs.
+
+	struct stat filestat;
+	fileinfo.valid = (stat(path, &filestat) < 0);
+
+	if(fileinfo.valid)
+	{
+		fileinfo.fileHandle = open(path, O_RDONLY, 0);
+		if(fileinfo.fileHandle <= 0) fileinfo.valid = false;
+	
+		fileinfo.isFolder = S_ISDIR(filestat.st_mode);
+		fileinfo.isRegularFile = S_ISREG(filestat.st_mode);
+		fileinfo.size = filestat.st_size;
+		//TODO: Set content type.
+	}
+
+	return fileinfo;
+}
+
 
 char* readFile(char* fileName)
 {
@@ -178,6 +208,11 @@ char* readFile(char* fileName)
 	{
 		printf("Couldnt stat file: %s \n", fileName);
 		return NULL;
+	}
+	if(!S_ISREG(filestat.st_mode))
+	{
+		printf("Not regular file. Returning NULL");
+		return NULL;		
 	}
 
 	int fileSize = filestat.st_size;
