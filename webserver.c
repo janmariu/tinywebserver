@@ -26,7 +26,6 @@ struct fileInfo
 };
 
 void* reply(void* inhandle);
-char* readFile(char* fileName);
 struct fileInfo findFileInfo(char *path);
 
 void configureSocket(int port)
@@ -87,61 +86,34 @@ void acceptConnections()
 	}
 }
 
-void printBuffer(char* buffer)
+void send_response_msg(int sockethandle, char* msg)
 {
-	printf("#Start buffer:\n");
-	while(*buffer != '\0')
-	{
-		printf("%c", *buffer++);
-	}
-	printf("\n#End buffer\n");
-}
-
-char* findRequestResponse(char* requestBuffer, int bufferSize)
-{
-   	if(strncmp(requestBuffer, "GET", 3) == 0)
-	{
-		printf("GET Request\n");
-        	char* token = "/";
-		char* start = strpbrk(requestBuffer,token);		
-		char* iterator = start;
-
-		int length = 0;
-		while(*iterator++ != ' ' && length <= bufferSize){ length++; }
-		
-		char url[length+1];
-
-    	char* p = url;
-    	strncpy(p, start,length);
-		url[length] = '\0'; //strncpy is too stupid to terminate strings..
-
-    	char* result = readFile(p);
-		return result;
-	}
-
-	return NULL;
+    char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+    char header[strlen(headertemplate-1)];
+    snprintf(header, strlen(header), headertemplate, strlen(msg));
+    send(sockethandle, header, strlen(header), 0);
+    send(sockethandle, msg, strlen(msg), 0);
 }
 
 void send_response_ok(int sockethandle, int contentlength)
 {	
-        char *headertemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-        char header[strlen(headertemplate-1)];
-        snprintf(header, strlen(header), headertemplate, contentlength);
-		send(sockethandle, header, strlen(header), 0);
+    char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+    char header[strlen(headertemplate-1)];
+    snprintf(header, strlen(header), headertemplate, contentlength);
+    send(sockethandle, header, strlen(header), 0);
 }
 
 void send_response_404(int sockethandle)
 {
 
-        char *errormsg = "<body><h1>404 - Not Found</h1></body>";
-        char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-        char errorheader[strlen(errortemplate-1)];
-        snprintf(errorheader, strlen(errorheader), errortemplate, strlen(errormsg));
-        send(sockethandle, errorheader, strlen(errorheader), 0);
-        send(sockethandle, "\r\n", 2, 0);
-        send(sockethandle, errormsg, strlen(errormsg), 0);
+    char *errormsg = "<body><h1>404 - Not Found</h1></body>";
+    char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+    char errorheader[strlen(errortemplate-1)];
+    snprintf(errorheader, strlen(errorheader), errortemplate, strlen(errormsg));
+    send(sockethandle, errorheader, strlen(errorheader), 0);
+    send(sockethandle, "\r\n", 2, 0);
+    send(sockethandle, errormsg, strlen(errormsg), 0);
 }
-
 
 char* receiverequest(int sockethandle)
 {
@@ -160,7 +132,7 @@ char* receiverequest(int sockethandle)
 			int length = 0;
 			while(*iterator++ != ' ' && length <= recvSize){ length++; }
 			
-            result = malloc(length+1);
+            result = malloc(length);
 	    	strncpy(result, start,length);
     	}
 	}
@@ -175,7 +147,6 @@ bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
 	
 	if(fileinfo->fileHandle > 0)
 	{
-		printf("Sending file\n");
 		int bytesRead = read(fileinfo->fileHandle, buffer, fileinfo->size);
 		int bytesSent = send(sockethandle, buffer, bytesRead, 0);
 		return bytesSent == bytesRead;
@@ -195,16 +166,24 @@ void *reply(void *handle)
 
 	if(path != NULL)
 	{
-		printf("path: %s\n", path);
 		struct fileInfo fileinfo = findFileInfo(path);
-        printf("regular %d, valid: %d\n", fileinfo.isRegularFile, fileinfo.valid);
-		if(fileinfo.isRegularFile && fileinfo.valid)
-		{
-			printf("Sending response ok\n");
-			send_response_ok(sockethandle, fileinfo.size);
-			requestOk = send_file_contents(sockethandle, &fileinfo);
-			close(fileinfo.fileHandle);
-		}
+        printf("path: %s\n", path);
+
+        if(fileinfo.valid)
+        {
+            if(fileinfo.isRegularFile)
+            {
+                send_response_ok(sockethandle, fileinfo.size);
+                requestOk = send_file_contents(sockethandle, &fileinfo);
+            }
+            else if(fileinfo.isFolder)
+            {
+                send_response_msg(sockethandle, "Sorry folders not supported..");
+                requestOk = true;
+            }
+
+            close(fileinfo.fileHandle);
+        }
 	}
 
 	if(!requestOk)
@@ -229,7 +208,7 @@ struct fileInfo findFileInfo(char *path)
     //TODO: Find the sensible way to initialize structs.
 
 	struct stat filestat;
-    fileinfo.valid = (stat(path, &filestat) > 0);
+    fileinfo.valid = (stat(path, &filestat) == 0);
 
 	if(fileinfo.valid)
 	{
@@ -239,49 +218,9 @@ struct fileInfo findFileInfo(char *path)
 		fileinfo.isFolder = S_ISDIR(filestat.st_mode);
 		fileinfo.isRegularFile = S_ISREG(filestat.st_mode);
 		fileinfo.size = filestat.st_size;
-
-        printf("Fileinfo was valid..\n");
     }
 
 	return fileinfo;
-}
-
-
-char* readFile(char* fileName)
-{
-	struct stat filestat;
-	if(stat(fileName, &filestat) < 0)
-	{
-		printf("Couldnt stat file: %s \n", fileName);
-		return NULL;
-	}
-	if(!S_ISREG(filestat.st_mode))
-	{
-		printf("Not regular file. Returning NULL");
-		return NULL;		
-	}
-
-	int fileSize = filestat.st_size;
-
-	int fh = open(fileName, O_RDONLY, 0);
-	char* buffer = malloc(fileSize); 
-	char* bufferIter = buffer;
-	printf("Opening file: %s \n", fileName);
-	
-	if(fh > 0)
-	{
-		int bytesRead = read(fh, buffer, fileSize);
-
-        if(bytesRead <= 0)
-            return NULL;
-
-		return buffer; 		
-	}	
-	else
-	{
-		printf("Couldnt open file: %s \n", fileName);
-	}
-	return NULL; 
 }
 
 int main()
