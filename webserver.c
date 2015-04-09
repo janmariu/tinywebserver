@@ -111,13 +111,13 @@ char* findRequestResponse(char* requestBuffer, int bufferSize)
 		
 		char url[length+1];
 
-        	char* p = url;
-        	strncpy(p, start,length);
+    	char* p = url;
+    	strncpy(p, start,length);
 		url[length] = '\0'; //strncpy is too stupid to terminate strings..
 
-        	char* result = readFile(p);
-        	return result;
-    	}
+    	char* result = readFile(p);
+		return result;
+	}
 
 	return NULL;
 }
@@ -127,7 +127,7 @@ void send_response_ok(int sockethandle, int contentlength)
         char *headertemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
         char header[strlen(headertemplate-1)];
         snprintf(header, strlen(header), headertemplate, contentlength);
-	send(sockethandle, header, strlen(header), 0);
+		send(sockethandle, header, strlen(header), 0);
 }
 
 void send_response_404(int sockethandle)
@@ -142,49 +142,94 @@ void send_response_404(int sockethandle)
         send(sockethandle, errormsg, strlen(errormsg), 0);
 }
 
-void *reply(void *inhandle)
-{
-	int handle = *(int*)inhandle;
 
+char* receiverequest(int sockethandle)
+{
+	char* result = NULL;
 	char* requestBuffer = malloc(1024);
-	int recvSize = recv(handle, requestBuffer, 1024, 0); 
-	if(recvSize < 0)
+	int recvSize = recv(sockethandle, requestBuffer, 1024, 0); 
+
+	if(recvSize > 0)
 	{
-		free(requestBuffer);
-		printf("Bad request\n");
-		pthread_exit(NULL);
+		if(strncmp(requestBuffer, "GET", 3) == 0)
+		{	
+			char* token = "/";
+			char* start = strpbrk(requestBuffer,token);		
+			char* iterator = start;
+
+			int length = 0;
+			while(*iterator++ != ' ' && length <= recvSize){ length++; }
+			
+            result = malloc(length+1);
+	    	strncpy(result, start,length);
+    	}
+	}
+	
+	free(requestBuffer);
+	return result;
+}
+
+bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
+{	
+	char* buffer = malloc(fileinfo->size); 
+	
+	if(fileinfo->fileHandle > 0)
+	{
+		printf("Sending file\n");
+		int bytesRead = read(fileinfo->fileHandle, buffer, fileinfo->size);
+		int bytesSent = send(sockethandle, buffer, bytesRead, 0);
+		return bytesSent == bytesRead;
 	}
 
-	char* returnValue = findRequestResponse(requestBuffer, recvSize);
-	free(requestBuffer);
+	free(buffer);
+	return false;
+}
 
-    	if(returnValue != NULL)
-    	{
-		int contentlength = strlen(returnValue);
-		send_response_ok(handle, contentlength);
-		send(handle, returnValue, contentlength, 0);
-		free(returnValue);
-    	}
-    	else
-    	{
-		send_response_404(handle);
-    	}
+void *reply(void *handle)
+{
+	int sockethandle = *(int*)handle;
 
-	close(handle);
+	char *path = receiverequest(sockethandle);
+
+	bool requestOk = false;
+
+	if(path != NULL)
+	{
+		printf("path: %s\n", path);
+		struct fileInfo fileinfo = findFileInfo(path);
+        printf("regular %d, valid: %d\n", fileinfo.isRegularFile, fileinfo.valid);
+		if(fileinfo.isRegularFile && fileinfo.valid)
+		{
+			printf("Sending response ok\n");
+			send_response_ok(sockethandle, fileinfo.size);
+			requestOk = send_file_contents(sockethandle, &fileinfo);
+			close(fileinfo.fileHandle);
+		}
+	}
+
+	if(!requestOk)
+	{
+		send_response_404(sockethandle);
+	}
+	
+	free(path);
+	close(sockethandle);
 	NUM_THREADS--;
 	pthread_exit(NULL);
 }
-
 
 struct fileInfo findFileInfo(char *path)
 {	
 	struct fileInfo fileinfo;
 	fileinfo.fileHandle = -1;
 	fileinfo.size = 0;
-	//TODO: Find the sensible way to initialize structs.
+    fileinfo.valid = false;
+    fileinfo.isRegularFile = false;
+    fileinfo.isFolder = false;
+    //TODO: Find the sensible way to initialize structs.
 
 	struct stat filestat;
-	fileinfo.valid = (stat(path, &filestat) < 0);
+    fileinfo.valid = (stat(path, &filestat) > 0);
 
 	if(fileinfo.valid)
 	{
@@ -194,8 +239,9 @@ struct fileInfo findFileInfo(char *path)
 		fileinfo.isFolder = S_ISDIR(filestat.st_mode);
 		fileinfo.isRegularFile = S_ISREG(filestat.st_mode);
 		fileinfo.size = filestat.st_size;
-		//TODO: Set content type.
-	}
+
+        printf("Fileinfo was valid..\n");
+    }
 
 	return fileinfo;
 }
