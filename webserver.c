@@ -89,8 +89,8 @@ void acceptConnections()
 void send_response_msg(int sockethandle, char* msg)
 {
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char header[strlen(headertemplate-1)];
-    snprintf(header, strlen(header), headertemplate, strlen(msg));
+    char header[strlen(headertemplate)];
+    snprintf(header, strlen(headertemplate), headertemplate, strlen(msg));
     send(sockethandle, header, strlen(header), 0);
     send(sockethandle, msg, strlen(msg), 0);
 }
@@ -98,20 +98,21 @@ void send_response_msg(int sockethandle, char* msg)
 void send_response_ok(int sockethandle, int contentlength)
 {	
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char header[strlen(headertemplate-1)];
-    snprintf(header, strlen(header), headertemplate, contentlength);
-    send(sockethandle, header, strlen(header), 0);
+    char header[strlen(headertemplate)];
+    snprintf(header, strlen(headertemplate), headertemplate, contentlength);
+    send(sockethandle, header, strlen(header), 0);    
 }
 
 void send_response_404(int sockethandle)
 {
-
     char *errormsg = "<body><h1>404 - Not Found</h1></body>";
     char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char errorheader[strlen(errortemplate-1)];
-    snprintf(errorheader, strlen(errorheader), errortemplate, strlen(errormsg));
+
+    char errorheader[strlen(errortemplate)];
+    errorheader[strlen(errortemplate)] = '\0';
+    snprintf(errorheader, strlen(errortemplate), errortemplate, strlen(errormsg));
+
     send(sockethandle, errorheader, strlen(errorheader), 0);
-    send(sockethandle, "\r\n", 2, 0);
     send(sockethandle, errormsg, strlen(errormsg), 0);
 }
 
@@ -119,6 +120,7 @@ char* receiverequest(int sockethandle)
 {
 	char* result = NULL;
 	char* requestBuffer = malloc(1024);
+    memset(requestBuffer, 0, 1024);
 	int recvSize = recv(sockethandle, requestBuffer, 1024, 0); 
 
 	if(recvSize > 0)
@@ -132,7 +134,9 @@ char* receiverequest(int sockethandle)
 			int length = 0;
 			while(*iterator++ != ' ' && length <= recvSize){ length++; }
 			
-            result = malloc(length);
+            result = malloc(length+1);
+            result[length] = '\0';
+            memset(result, 0, length);
 	    	strncpy(result, start,length);
     	}
 	}
@@ -144,7 +148,8 @@ char* receiverequest(int sockethandle)
 bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
 {	
 	char* buffer = malloc(fileinfo->size); 
-	
+    memset(buffer, 0, fileinfo->size);
+
 	if(fileinfo->fileHandle > 0)
 	{
 		int bytesRead = read(fileinfo->fileHandle, buffer, fileinfo->size);
@@ -156,11 +161,38 @@ bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
 	return false;
 }
 
+struct fileInfo findFileInfo(char *path)
+{
+    struct fileInfo fileinfo;
+    fileinfo.fileHandle = -1;
+    fileinfo.size = 0;
+    fileinfo.valid = false;
+    fileinfo.isRegularFile = false;
+    fileinfo.isFolder = false;
+    //TODO: Find the sensible way to initialize structs.
+
+    struct stat filestat;
+    fileinfo.valid = (stat(path, &filestat) == 0);
+
+    if(fileinfo.valid)
+    {
+        fileinfo.fileHandle = open(path, O_RDONLY, 0);
+        if(fileinfo.fileHandle <= 0) fileinfo.valid = false;
+
+        fileinfo.isFolder = S_ISDIR(filestat.st_mode);
+        fileinfo.isRegularFile = S_ISREG(filestat.st_mode);
+        fileinfo.size = filestat.st_size;
+    }
+
+    return fileinfo;
+}
+
 void *reply(void *handle)
 {
 	int sockethandle = *(int*)handle;
 
 	char *path = receiverequest(sockethandle);
+    printf("SocketHandle: %d\n", sockethandle);
 
 	bool requestOk = false;
 
@@ -192,35 +224,9 @@ void *reply(void *handle)
 	}
 	
 	free(path);
-	close(sockethandle);
+    close(sockethandle);
 	NUM_THREADS--;
 	pthread_exit(NULL);
-}
-
-struct fileInfo findFileInfo(char *path)
-{	
-	struct fileInfo fileinfo;
-	fileinfo.fileHandle = -1;
-	fileinfo.size = 0;
-    fileinfo.valid = false;
-    fileinfo.isRegularFile = false;
-    fileinfo.isFolder = false;
-    //TODO: Find the sensible way to initialize structs.
-
-	struct stat filestat;
-    fileinfo.valid = (stat(path, &filestat) == 0);
-
-	if(fileinfo.valid)
-	{
-		fileinfo.fileHandle = open(path, O_RDONLY, 0);
-		if(fileinfo.fileHandle <= 0) fileinfo.valid = false;
-	
-		fileinfo.isFolder = S_ISDIR(filestat.st_mode);
-		fileinfo.isRegularFile = S_ISREG(filestat.st_mode);
-		fileinfo.size = filestat.st_size;
-    }
-
-	return fileinfo;
 }
 
 int main()
