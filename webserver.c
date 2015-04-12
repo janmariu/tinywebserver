@@ -87,20 +87,23 @@ void acceptConnections()
 }
 
 void send_response_msg(int sockethandle, char* msg)
-{
+{    
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
     char header[strlen(headertemplate)];
     snprintf(header, strlen(headertemplate), headertemplate, strlen(msg));
-    send(sockethandle, header, strlen(header), 0);
+    send(sockethandle, header, strlen(headertemplate), 0);
     send(sockethandle, msg, strlen(msg), 0);
 }
 
 void send_response_ok(int sockethandle, int contentlength)
-{	
+{
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char header[strlen(headertemplate)];
-    snprintf(header, strlen(headertemplate), headertemplate, contentlength);
-    send(sockethandle, header, strlen(header), 0);    
+    char *header = malloc(2048);
+    sprintf(header, headertemplate, contentlength);
+    send(sockethandle, "\r\n", 2, 0);
+    send(sockethandle, header, strlen(header), 0);
+    send(sockethandle, "\r\n", 2, 0);
+    free(header);
 }
 
 void send_response_404(int sockethandle)
