@@ -141,10 +141,10 @@ char* receiverequest(int sockethandle)
 			int length = 0;
 			while(*iterator++ != ' ' && length <= recvSize){ length++; }
 			
-            result = malloc(length+1);
-            result[length] = '\0';
+            result = malloc(length+1);            
             memset(result, 0, length);
-	    	strncpy(result, start,length);
+            result[length] = '\0';
+            strncpy(result, start,length);
     	}
 	}
 	
