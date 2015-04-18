@@ -193,7 +193,7 @@ char* create_directory_listing(char* path)
         result = realloc(result, extrasize);
 
         strcat(result, tmpurl);
-        strncat(result, item->d_name, item->d_namlen);
+        strcat(result, item->d_name);
         strcat(result, "</a><br>");
     }
 
