@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <dirent.h>
 
 int SOCKET;
 int MAX_THREADS=3;
@@ -152,6 +153,53 @@ char* receiverequest(int sockethandle)
 	return result;
 }
 
+char* create_directory_listing(char* path)
+{
+    //Strip ending slashes
+    while(strlen(path) > 1 && strcmp(path + strlen(path)-1,"/") == 0)
+    {
+        char *tmppath = path;
+        tmppath = tmppath + strlen(path)-1;
+        *tmppath = '\0';
+    }
+
+    DIR *dir = opendir(path);
+    if(dir == NULL)
+    {
+        return NULL;
+    }
+
+    char* result = malloc(1);
+    char *linktemplate = "<a href=\"%s%s%s\">";
+    int urllen = strlen(path);
+
+    struct dirent *item;
+    while((item = readdir(dir)) != NULL)
+    {
+        //Create a link to the url.
+        int itemlen = strlen(item->d_name);
+        char *tmpurl = malloc(strlen(linktemplate) + urllen + itemlen + 1);
+        if(urllen > 1)
+        {
+            sprintf(tmpurl, linktemplate,path, "/", item->d_name);
+        }
+        else
+        {
+            sprintf(tmpurl, linktemplate, "", "", item->d_name);
+        }
+
+        //Add the item to the folder listing.
+        size_t extrasize = strlen(result) + itemlen + strlen(tmpurl) + 9;
+        result = realloc(result, extrasize);
+
+        strcat(result, tmpurl);
+        strncat(result, item->d_name, item->d_namlen);
+        strcat(result, "</a><br>");
+    }
+
+    return result;
+}
+
 bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
 {	
 	char* buffer = malloc(fileinfo->size); 
@@ -217,7 +265,9 @@ void *reply(void *handle)
             }
             else if(fileinfo.isFolder)
             {
-                send_response_msg(sockethandle, "Sorry folders not supported..");
+                char* listing = create_directory_listing(path);
+                send_response_msg(sockethandle, listing);
+                free(listing);
                 requestOk = true;
             }
 
@@ -238,9 +288,9 @@ void *reply(void *handle)
 
 int main()
 {
-	printf("Starting..\n");
+    printf("Starting..\n");
 	configureSocket(8080);
 	acceptConnections();
 	printf("Exiting..\n");
-	return 0;
+    return 0;
 }
