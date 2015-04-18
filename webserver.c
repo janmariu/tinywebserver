@@ -87,12 +87,16 @@ void acceptConnections()
 }
 
 void send_response_msg(int sockethandle, char* msg)
-{    
+{
+    char* newline = "\r\n";
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char header[strlen(headertemplate)];
-    snprintf(header, strlen(headertemplate), headertemplate, strlen(msg));
-    send(sockethandle, header, strlen(headertemplate), 0);
+    char *header = malloc(2048);
+    sprintf(header, headertemplate, strlen(msg));
+    send(sockethandle, header, strlen(header), 0);
+    send(sockethandle, newline, strlen(newline), 0);
     send(sockethandle, msg, strlen(msg), 0);
+    send(sockethandle, newline, strlen(newline), 0);
+    free(header);
 }
 
 void send_response_ok(int sockethandle, int contentlength)
@@ -100,7 +104,6 @@ void send_response_ok(int sockethandle, int contentlength)
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
     char *header = malloc(2048);
     sprintf(header, headertemplate, contentlength);
-    send(sockethandle, "\r\n", 2, 0);
     send(sockethandle, header, strlen(header), 0);
     send(sockethandle, "\r\n", 2, 0);
     free(header);
@@ -110,13 +113,14 @@ void send_response_404(int sockethandle)
 {
     char *errormsg = "<body><h1>404 - Not Found</h1></body>";
     char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+    char *errorheader = malloc(2048);
 
-    char errorheader[strlen(errortemplate)];
-    errorheader[strlen(errortemplate)] = '\0';
-    snprintf(errorheader, strlen(errortemplate), errortemplate, strlen(errormsg));
-
+    sprintf(errorheader, errortemplate, strlen(errormsg));
     send(sockethandle, errorheader, strlen(errorheader), 0);
+    send(sockethandle, "\r\n", 2, 0);
     send(sockethandle, errormsg, strlen(errormsg), 0);
+    send(sockethandle, "\r\n", 2, 0);
+    free(errorheader);
 }
 
 char* receiverequest(int sockethandle)
