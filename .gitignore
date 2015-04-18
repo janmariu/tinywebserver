@@ -30,3 +30,9 @@
 
 # Debug files
 *.dSYM/
+
+#QTCreator
+*.config
+*.creator
+*.files
+*.includes
