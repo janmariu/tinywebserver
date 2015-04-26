@@ -170,6 +170,7 @@ char* create_directory_listing(char* path)
     }
 
     char* result = malloc(1);
+    *result = '\0';
     char *linktemplate = "<a href=\"%s%s%s\">";
     int urllen = strlen(path);
 
