@@ -87,6 +87,41 @@ void acceptConnections()
 	}
 }
 
+char* find_contenttype(char* path)
+{
+    char* extension = strrchr(path, '.');
+
+    if(extension != NULL)
+    {
+        if((strcmp(extension, ".html") == 0 ||
+             strcmp(extension, ".htm") == 0))
+        {
+            return "text/html";
+        }
+        else if(strcmp(extension, ".jpg") == 0)
+        {
+            return "image/jpeg";
+        }
+        else if(strcmp(extension, ".png") == 0)
+        {
+            return "image/png";
+        }
+        else if(strcmp(extension, ".gif") == 0)
+        {
+            return "image/gif";
+        }
+        else if(strcmp(extension, ".css") == 0)
+        {
+            return "text/css";
+        }
+        else if(strcmp(extension, ".txt") == 0)
+        {
+            return "text/plain";
+        }
+    }
+    return "application/octet-stream";
+}
+
 void send_response_msg(int sockethandle, char* msg)
 {
     char* newline = "\r\n";
@@ -100,11 +135,11 @@ void send_response_msg(int sockethandle, char* msg)
     free(header);
 }
 
-void send_response_ok(int sockethandle, int contentlength)
+void send_response_ok(int sockethandle, char* contenttype, int contentlength)
 {
-    char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
+    char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n";
     char *header = malloc(2048);
-    sprintf(header, headertemplate, contentlength);
+    sprintf(header, headertemplate, contenttype, contentlength);
     send(sockethandle, header, strlen(header), 0);
     send(sockethandle, "\r\n", 2, 0);
     free(header);
@@ -124,8 +159,25 @@ void send_response_404(int sockethandle)
     free(errorheader);
 }
 
+bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
+{
+    char* buffer = malloc(fileinfo->size);
+    memset(buffer, 0, fileinfo->size);
+
+    if(fileinfo->fileHandle > 0)
+    {
+        int bytesRead = read(fileinfo->fileHandle, buffer, fileinfo->size);
+        int bytesSent = send(sockethandle, buffer, bytesRead, 0);
+        return bytesSent == bytesRead;
+    }
+
+    free(buffer);
+    return false;
+}
+
 char* receiverequest(int sockethandle)
 {
+    //TODO: what if the request is bigger than one byte? There is a better way to find the url.
 	char* result = NULL;
 	char* requestBuffer = malloc(1024);
     memset(requestBuffer, 0, 1024);
@@ -201,22 +253,6 @@ char* create_directory_listing(char* path)
     return result;
 }
 
-bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
-{	
-	char* buffer = malloc(fileinfo->size); 
-    memset(buffer, 0, fileinfo->size);
-
-	if(fileinfo->fileHandle > 0)
-	{
-		int bytesRead = read(fileinfo->fileHandle, buffer, fileinfo->size);
-		int bytesSent = send(sockethandle, buffer, bytesRead, 0);
-		return bytesSent == bytesRead;
-	}
-
-	free(buffer);
-	return false;
-}
-
 struct fileInfo findFileInfo(char *path)
 {
     struct fileInfo fileinfo;
@@ -246,10 +282,7 @@ struct fileInfo findFileInfo(char *path)
 void *reply(void *handle)
 {
 	int sockethandle = *(int*)handle;
-
 	char *path = receiverequest(sockethandle);
-    printf("SocketHandle: %d\n", sockethandle);
-
 	bool requestOk = false;
 
 	if(path != NULL)
@@ -261,7 +294,8 @@ void *reply(void *handle)
         {
             if(fileinfo.isRegularFile)
             {
-                send_response_ok(sockethandle, fileinfo.size);
+                char *contenttype = find_contenttype(path);
+                send_response_ok(sockethandle, contenttype, fileinfo.size);
                 requestOk = send_file_contents(sockethandle, &fileinfo);
             }
             else if(fileinfo.isFolder)
