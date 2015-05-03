@@ -353,6 +353,7 @@ int main(int argc, char** argv)
         return -2;
     }
     closedir(dir);
+    WWWROOT = argv[1];
 
     if(strtol(argv[2], NULL, 10) <= 0)
     {
