@@ -16,6 +16,7 @@ int SOCKET;
 int MAX_THREADS=3;
 int NUM_THREADS=0;
 long COUNTER=0;
+char* WWWROOT = "/Users/janmariu";
 
 struct fileInfo
 {
@@ -175,7 +176,7 @@ bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
     return false;
 }
 
-char* receiverequest(int sockethandle)
+char* find_requested_resource(int sockethandle)
 {
     //TODO: what if the request is bigger than one byte? There is a better way to find the url.
 	char* result = NULL;
@@ -194,10 +195,13 @@ char* receiverequest(int sockethandle)
 			int length = 0;
 			while(*iterator++ != ' ' && length <= recvSize){ length++; }
 			
-            result = malloc(length+1);            
-            memset(result, 0, length);
-            result[length] = '\0';
-            strncpy(result, start,length);
+            int resultlen = strlen(WWWROOT) + length + 1;
+            result = malloc(resultlen);
+            memset(result, 0, resultlen);
+            result[resultlen] = '\0';
+
+            strncpy(result, WWWROOT,strlen(WWWROOT));
+            strncat(result,start, length);
     	}
 	}
 	
@@ -214,6 +218,9 @@ char* create_directory_listing(char* path)
         tmppath = tmppath + strlen(path)-1;
         *tmppath = '\0';
     }
+
+    //Create a url relative to WWWROOT
+    char * url = path + strlen(WWWROOT);
 
     DIR *dir = opendir(path);
     if(dir == NULL)
@@ -234,7 +241,7 @@ char* create_directory_listing(char* path)
         char *tmpurl = malloc(strlen(linktemplate) + urllen + itemlen + 1);
         if(urllen > 1)
         {
-            sprintf(tmpurl, linktemplate,path, "/", item->d_name);
+            sprintf(tmpurl, linktemplate,url, "/", item->d_name);
         }
         else
         {
@@ -282,7 +289,7 @@ struct fileInfo findFileInfo(char *path)
 void *reply(void *handle)
 {
 	int sockethandle = *(int*)handle;
-	char *path = receiverequest(sockethandle);
+    char *path = find_requested_resource(sockethandle);
 	bool requestOk = false;
 
 	if(path != NULL)
@@ -321,7 +328,7 @@ void *reply(void *handle)
 	pthread_exit(NULL);
 }
 
-int main()
+int main(int argc, char** argv)
 {
     printf("Starting..\n");
 	configureSocket(8080);
