@@ -328,10 +328,41 @@ void *reply(void *handle)
 	pthread_exit(NULL);
 }
 
+void print_usage()
+{
+    printf("Usage: webserver.out <root folder> <port> Example: webserver.out /var/www 8080\n");
+}
+
+int getPort(char* arg)
+{
+    return atoi(arg);
+}
+
 int main(int argc, char** argv)
 {
+    if(argc < 3)
+    {
+        print_usage();
+        return -1;
+    }
+
+    DIR *dir = opendir(argv[1]);
+    if(dir == NULL)
+    {
+        print_usage();
+        return -2;
+    }
+    closedir(dir);
+
+    if(strtol(argv[2], NULL, 10) <= 0)
+    {
+        printf("Invalid port.\n");
+        print_usage();
+        return -3;
+    }
+
     printf("Starting..\n");
-	configureSocket(8080);
+    configureSocket(atoi(argv[2]));
 	acceptConnections();
 	printf("Exiting..\n");
     return 0;
