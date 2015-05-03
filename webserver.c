@@ -115,7 +115,7 @@ char* find_contenttype(char* path)
         {
             return "text/css";
         }
-        else if(strcmp(extension, ".txt") == 0)
+        else if(strcmp(extension, ".txt") == 0 || strcmp(extension, ".c") == 0 || strcmp(extension, ".cpp") == 0)
         {
             return "text/plain";
         }
