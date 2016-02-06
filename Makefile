@@ -1,7 +1,7 @@
 LDFLAGS =
 
 ifneq (Darwin, $(shell uname -s))
-	LDFLAGS += "-lpthread"
+	LDFLAGS += -lpthread
 endif
 
 all:
