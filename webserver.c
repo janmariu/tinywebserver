@@ -115,7 +115,9 @@ char* find_contenttype(char* path)
         {
             return "text/css";
         }
-        else if(strcmp(extension, ".txt") == 0 || strcmp(extension, ".c") == 0 || strcmp(extension, ".cpp") == 0)
+        else if(strcmp(extension, ".txt") == 0 
+            || strcmp(extension, ".c") == 0 
+            || strcmp(extension, ".cpp") == 0)
         {
             return "text/plain";
         }
@@ -184,7 +186,7 @@ char* find_requested_resource(int sockethandle)
     memset(requestBuffer, 0, 1024);
 	int recvSize = recv(sockethandle, requestBuffer, 1024, 0); 
 
-	if(recvSize > 0)
+	if(recvSize > 3)
 	{
 		if(strncmp(requestBuffer, "GET", 3) == 0)
 		{	
@@ -192,16 +194,19 @@ char* find_requested_resource(int sockethandle)
 			char* start = strpbrk(requestBuffer,token);		
 			char* iterator = start;
 
-			int length = 0;
-			while(*iterator++ != ' ' && length <= recvSize){ length++; }
-			
-            int resultlen = strlen(WWWROOT) + length + 1;
-            result = malloc(resultlen);
-            memset(result, 0, resultlen);
-            result[resultlen] = '\0';
+            if(start != NULL)
+            {
+                int length = 0;
+                while(*iterator++ != ' ' && length <= recvSize){ length++; }
+                
+                int resultlen = strlen(WWWROOT) + length + 1;
+                result = malloc(resultlen);
+                memset(result, 0, resultlen);
+                result[resultlen] = '\0';
 
-            strncpy(result, WWWROOT,strlen(WWWROOT));
-            strncat(result,start, length);
+                strncpy(result, WWWROOT, strlen(WWWROOT));
+                strncat(result, start, length);
+            }
     	}
 	}
 	
@@ -220,7 +225,7 @@ char* create_directory_listing(char* path)
     }
 
     //Create a url relative to WWWROOT
-    char * url = path + strlen(WWWROOT);
+    char *url = path + strlen(WWWROOT);
 
     DIR *dir = opendir(path);
     if(dir == NULL)
