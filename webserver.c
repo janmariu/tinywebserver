@@ -15,7 +15,6 @@
 int SOCKET;
 int MAX_THREADS=3;
 int NUM_THREADS=0;
-long COUNTER=0;
 char* WWWROOT = "/Users/janmariu";
 
 struct fileInfo
@@ -27,10 +26,10 @@ struct fileInfo
 	bool isRegularFile;
 };
 
-void* reply(void* inhandle);
-struct fileInfo findFileInfo(char *path);
+void* respond_to_request(void* inhandle);
+struct fileInfo find_fileinfo(char *path);
 
-void configureSocket(int port)
+void configure_socket(int port)
 {
 	struct sockaddr_in localaddr;
 	localaddr.sin_family = AF_INET;
@@ -59,7 +58,7 @@ void configureSocket(int port)
 	}
 }
 
-void acceptConnections()
+void accept_connections()
 {
 	printf("Accepting connections..\n");
 	struct sockaddr_in source;
@@ -79,7 +78,7 @@ void acceptConnections()
 		*/
 			NUM_THREADS++;
 			pthread_t id;
-			pthread_create(&id, NULL, reply, &connectionHandle);
+			pthread_create(&id, NULL, respond_to_request, &connectionHandle);
 		}
 		else
 		{
@@ -117,7 +116,8 @@ char* find_contenttype(char* path)
         }
         else if(strcmp(extension, ".txt") == 0 
             || strcmp(extension, ".c") == 0 
-            || strcmp(extension, ".cpp") == 0)
+            || strcmp(extension, ".cpp") == 0
+            || strcmp(extension, ".log") == 0)
         {
             return "text/plain";
         }
@@ -265,16 +265,17 @@ char* create_directory_listing(char* path)
     return result;
 }
 
-struct fileInfo findFileInfo(char *path)
+struct fileInfo find_fileinfo(char *path)
 {
-    struct fileInfo fileinfo;
-    fileinfo.fileHandle = -1;
-    fileinfo.size = 0;
-    fileinfo.valid = false;
-    fileinfo.isRegularFile = false;
-    fileinfo.isFolder = false;
-    //TODO: Find the sensible way to initialize structs.
-
+    struct fileInfo fileinfo = 
+    {
+        .fileHandle = -1,
+        .size = 0,
+        .valid = false,
+        .isRegularFile = false,
+        .isFolder = false,
+    };
+    
     struct stat filestat;
     fileinfo.valid = (stat(path, &filestat) == 0);
 
@@ -291,7 +292,7 @@ struct fileInfo findFileInfo(char *path)
     return fileinfo;
 }
 
-void *reply(void *handle)
+void *respond_to_request(void *handle)
 {
 	int sockethandle = *(int*)handle;
     char *path = find_requested_resource(sockethandle);
@@ -299,8 +300,8 @@ void *reply(void *handle)
 
 	if(path != NULL)
 	{
-		struct fileInfo fileinfo = findFileInfo(path);
-        printf("path: %s\n", path);
+		struct fileInfo fileinfo = find_fileinfo(path);
+        printf("serving: %s\n", path);
 
         if(fileinfo.valid)
         {
@@ -338,11 +339,6 @@ void print_usage()
     printf("Usage: webserver.out <root folder> <port> Example: webserver.out /var/www 8080\n");
 }
 
-int getPort(char* arg)
-{
-    return atoi(arg);
-}
-
 int main(int argc, char** argv)
 {
     if(argc < 3)
@@ -368,8 +364,8 @@ int main(int argc, char** argv)
     }
 
     printf("Starting..\n");
-    configureSocket(atoi(argv[2]));
-	acceptConnections();
+    configure_socket(atoi(argv[2]));
+	accept_connections();
 	printf("Exiting..\n");
     return 0;
 }
