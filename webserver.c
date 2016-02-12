@@ -130,7 +130,7 @@ void send_response_msg(int sockethandle, char* msg)
 {
     char* newline = "\r\n";
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char *header = malloc(2048);
+    char *header = malloc(strlen(headertemplate) + strlen(msg) + 1);
     sprintf(header, headertemplate, strlen(msg));
     send(sockethandle, header, strlen(header), 0);
     send(sockethandle, newline, strlen(newline), 0);
@@ -142,7 +142,7 @@ void send_response_msg(int sockethandle, char* msg)
 void send_response_ok(int sockethandle, char* contenttype, int contentlength)
 {
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char *header = malloc(2048);
+    char *header = malloc(strlen(header) + strlen(headertemplate) + strlen(contenttype) + 1);
     sprintf(header, headertemplate, contenttype, contentlength);
     send(sockethandle, header, strlen(header), 0);
     send(sockethandle, "\r\n", 2, 0);
