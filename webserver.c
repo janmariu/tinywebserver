@@ -11,11 +11,12 @@
 #include <string.h>
 #include <stdbool.h>
 #include <dirent.h>
+#include <stdbool.h>
 
 int SOCKET;
 int MAX_THREADS=3;
 int NUM_THREADS=0;
-char* WWWROOT = "/Users/janmariu";
+char* WWWROOT = "/tmp";
 
 struct fileInfo
 {
@@ -150,9 +151,9 @@ void send_response_ok(int sockethandle, char* contenttype, int contentlength)
 
 void send_response_404(int sockethandle)
 {
-    char *errormsg = "<body><h1>404 - Not Found</h1></body>";
-    char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char *errorheader = malloc(2048);
+    char *errormsg = "<body><h1>404 - Not Found</h1></body>"; //37
+    char *errortemplate = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n"; //96
+    char *errorheader = malloc(strlen(errormsg) + strlen(errortemplate) + 1);
 
     sprintf(errorheader, errortemplate, strlen(errormsg));
     send(sockethandle, errorheader, strlen(errorheader), 0);
@@ -178,7 +179,7 @@ bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
     return false;
 }
 
-char* find_requested_resource(int sockethandle)
+char* find_requested_resource(int sockethandle) //rename to parse request?
 {
     //TODO: what if the request is bigger than one byte? There is a better way to find the url.
 	char* result = NULL;
@@ -336,33 +337,88 @@ void *respond_to_request(void *handle)
 
 void print_usage()
 {
-    printf("Usage: webserver.out <root folder> <port> Example: webserver.out /var/www 8080\n");
+    printf("Usage: webserver.out <root folder> <port> [--daemon]\n");
+    printf("Optional arguments:\n");
+    printf("--daemon - run as daemon\n");
+    printf("--single - enforce single process.\n");
+    printf("Example: webserver.out /var/www 8080\n");
 }
 
-int main(int argc, char** argv)
+int check_lockfile()
+{
+    int fd = open("/tmp/tinywebserver.pid", O_RDWR | O_CREAT, S_IRWXU);
+    if(lockf(fd, F_TEST, 0) == 0)
+    {
+        int lock = lockf(fd, F_LOCK,0);
+        printf("lock: %d\n", lock);
+        return 0;
+    }
+    else
+    {
+        printf("file was locked\n");
+    }
+
+    return -1;
+}
+
+void parse_commandline(int argc, char** argv)
 {
     if(argc < 3)
     {
         print_usage();
-        return -1;
+        exit(-1);
     }
 
     DIR *dir = opendir(argv[1]);
     if(dir == NULL)
     {
+        printf("Invalid folder.\n");
         print_usage();
-        return -2;
+        exit(-2);
     }
     closedir(dir);
     WWWROOT = argv[1];
 
     if(strtol(argv[2], NULL, 10) <= 0)
     {
-        printf("Invalid port.\n");
         print_usage();
-        return -3;
+        exit(-3);
     }
 
+    bool dofork = false;
+    bool singleInstance = false;
+
+    for(int i=3; i < argc; ++i)
+    {
+        if(strcmp(argv[i], "--daemon") == 0)
+            dofork = true;
+
+        if(strcmp(argv[i], "--single") == 0)
+            singleInstance = true;
+    }
+
+    if(dofork)
+    {
+        printf("Running in the background..\n");
+        pid_t pid = fork();
+        if(pid != 0)        
+            exit(0);            
+    }
+
+    if(singleInstance)
+    {
+        printf("single argument\n");
+        if(check_lockfile() != 0)
+        {
+            printf("An instance is allready running\n");
+            exit(-1);
+        }    
+    }
+}
+
+int main(int argc, char** argv)
+{
+    parse_commandline(argc, argv);
     printf("Starting..\n");
     configure_socket(atoi(argv[2]));
 	accept_connections();
