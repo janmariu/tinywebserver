@@ -388,7 +388,8 @@ void parse_commandline(int argc, char** argv)
     bool dofork = false;
     bool singleInstance = false;
 
-    for(int i=3; i < argc; ++i)
+    int i=3;
+    for(; i < argc; ++i)
     {
         if(strcmp(argv[i], "--daemon") == 0)
             dofork = true;
