@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project(tinywebserver C)
+find_package(Threads REQUIRED)
+add_executable(${PROJECT_NAME} "webserver.c")
+target_link_libraries (${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
