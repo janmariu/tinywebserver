@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <dirent.h>
 #include <stdbool.h>
+#include <signal.h>
 
 int SOCKET;
 int MAX_THREADS=3;
@@ -421,6 +422,7 @@ int main(int argc, char** argv)
 {
     parse_commandline(argc, argv);
     printf("Starting..\n");
+    signal(SIGPIPE, SIG_IGN);
     configure_socket(atoi(argv[2]));
 	accept_connections();
 	printf("Exiting..\n");
