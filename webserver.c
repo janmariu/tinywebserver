@@ -143,7 +143,8 @@ void send_response_msg(int sockethandle, char* msg)
 void send_response_ok(int sockethandle, char* contenttype, int contentlength)
 {
     char *headertemplate = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n";
-    char *header = malloc(strlen(header) + strlen(headertemplate) + strlen(contenttype) + 1);
+    char *header = malloc(strlen(headertemplate) + strlen(contenttype) + 1);
+    //consider memset to '\0'
     sprintf(header, headertemplate, contenttype, contentlength);
     send(sockethandle, header, strlen(header), 0);
     send(sockethandle, "\r\n", 2, 0);
@@ -169,23 +170,25 @@ bool send_file_contents(int sockethandle, struct fileInfo *fileinfo)
     char* buffer = malloc(fileinfo->size);
     memset(buffer, 0, fileinfo->size);
 
+    int bytesRead = 0;
+    int bytesSent = 0;
+
     if(fileinfo->fileHandle > 0)
     {
-        int bytesRead = read(fileinfo->fileHandle, buffer, fileinfo->size);
-        int bytesSent = send(sockethandle, buffer, bytesRead, 0);
-        return bytesSent == bytesRead;
+        bytesRead = read(fileinfo->fileHandle, buffer, fileinfo->size);
+        bytesSent = send(sockethandle, buffer, bytesRead, 0);
     }
 
     free(buffer);
-    return false;
+    return bytesRead > 0 && bytesSent > 0 && (bytesSent == bytesRead);
 }
 
 char* find_requested_resource(int sockethandle) //rename to parse request?
 {
-    //TODO: what if the request is bigger than one byte? There is a better way to find the url.
+    //TODO: what if the request is bigger than one kb? There is a better way to find the url.
 	char* result = NULL;
 	char* requestBuffer = malloc(1024);
-    memset(requestBuffer, 0, 1024);
+	memset(requestBuffer, 0, 1024);
 	int recvSize = recv(sockethandle, requestBuffer, 1024, 0); 
 
 	if(recvSize > 3)
@@ -203,8 +206,7 @@ char* find_requested_resource(int sockethandle) //rename to parse request?
                 
                 int resultlen = strlen(WWWROOT) + length + 1;
                 result = malloc(resultlen);
-                memset(result, 0, resultlen);
-                result[resultlen] = '\0';
+                memset(result, '\0', resultlen);
 
                 strncpy(result, WWWROOT, strlen(WWWROOT));
                 strncat(result, start, length);
@@ -262,7 +264,10 @@ char* create_directory_listing(char* path)
         strcat(result, tmpurl);
         strcat(result, item->d_name);
         strcat(result, "</a><br>");
+
+        free(tmpurl);
     }
+    closedir(dir);
 
     return result;
 }
